@@ -1,0 +1,91 @@
+/*
+ * YouTube GIF Blocker — styles.css
+ *
+ * Первый рубеж защиты: CSS-правила применяются браузером ДО выполнения JS,
+ * мгновенно скрывая GIF-контейнеры ещё до их рендеринга.
+ *
+ * Используем display:none !important для полного исключения из layout.
+ * JS (content.js) затем физически удалит эти элементы из DOM,
+ * освобождая память от анимаций.
+ */
+
+/* ─── 1. Общие img-теги с GIF-источниками ──────────────────────────────── */
+
+/*
+ * Атрибут src содержит ".gif" — базовое правило для прямых <img>.
+ * CSS-селектор [attr*=val] работает как substring match.
+ */
+img[src*=".gif"],
+img[src*="giphy.com"],
+img[src*="tenor.com"],
+img[src*="media.giphy"],
+img[src*="media.tenor"] {
+  display: none !important;
+}
+
+/* ─── 2. Контейнеры аттачментов в комментариях ─────────────────────────── */
+
+/*
+ * ytd-comment-thread-renderer  — корень ветки комментария
+ * #content-text                — текстовое тело комментария (там вставляются медиа)
+ * ytd-backstage-post-renderer  — посты сообщества (Community posts)
+ *
+ * Целимся в дочерние медиа-блоки, а не в весь комментарий,
+ * чтобы не скрывать текст и аватарки.
+ */
+ytd-comment-thread-renderer ytd-comment-renderer img[src*=".gif"],
+ytd-comment-thread-renderer ytd-comment-renderer img[src*="giphy"],
+ytd-comment-thread-renderer ytd-comment-renderer img[src*="tenor"],
+ytd-backstage-post-renderer img[src*=".gif"],
+ytd-backstage-post-renderer img[src*="giphy"],
+ytd-backstage-post-renderer img[src*="tenor"] {
+  display: none !important;
+}
+
+/* ─── 3. Чат прямых трансляций (#chat) ─────────────────────────────────── */
+
+#chat img[src*=".gif"],
+#chat img[src*="giphy"],
+#chat img[src*="tenor"],
+yt-live-chat-renderer img[src*=".gif"],
+yt-live-chat-renderer img[src*="giphy"],
+yt-live-chat-renderer img[src*="tenor"] {
+  display: none !important;
+}
+
+/* ─── 4. Кастомные медиа-аттачменты (ytd-attachment-renderer и похожие) ── */
+
+ytd-attachment-renderer,
+ytd-message-renderer[has-gif],
+yt-image-banner-view-model img[src*=".gif"] {
+  display: none !important;
+}
+
+/* ─── 5. YouTube Image Comments (новая фича, не GIF, но визуальный мусор) ─ */
+
+/*
+ * ytw-comment-image-attachment-view-model — контейнер изображений-аттачментов
+ * в комментариях YouTube (Image Comments / стикеры).
+ * Грузятся с i.ytimg.com/c_exp/ — не .gif, но нежелательны.
+ */
+ytw-comment-image-attachment-view-model {
+  display: none !important;
+}
+
+/* Также ловим img напрямую по CDN-пути image comments */
+img[src*="i.ytimg.com/c_exp/"],
+img[src*="/c_exp/"] {
+  display: none !important;
+}
+
+/*
+ * ИСКЛЮЧЕНИЯ — намеренно НЕ скрываем:
+ *   • yt-img-shadow[is-avatar]   — аватарки пользователей
+ *   • yt-emoji                   — встроенные эмодзи YouTube (не GIF-файлы)
+ *   • ytd-thumbnail img          — превью видео
+ *   • #logo img                  — логотип YouTube
+ *
+ * Эти элементы не имеют src с ".gif", "giphy" или "tenor",
+ * поэтому правила выше их и так не затрагивают.
+ * Комментарий оставлен для явной документации намерений.
+ */
