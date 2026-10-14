@@ -1,158 +1,177 @@
 # YouTube GIF Blocker 🚫🎞️
 
-Ультра-лёгкое расширение Chrome/Firefox (Manifest V3), которое **намертво вырезает анимированные GIF** из комментариев, чата и постов сообщества YouTube.
+> A lightweight Chrome/Firefox extension (Manifest V3) that **silently removes animated GIFs, image stickers, and media attachments** from YouTube comments, chat, and community posts.
+
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Manifest](https://img.shields.io/badge/manifest-v3-green)
+![License](https://img.shields.io/badge/license-MIT-orange)
+![Browsers](https://img.shields.io/badge/browsers-Chrome%20%7C%20Edge%20%7C%20Brave%20%7C%20Firefox-blueviolet)
 
 ---
 
-## Что делает расширение
+## What It Blocks
 
-| Зона блокировки | Статус |
-|----------------|--------|
-| Комментарии (`ytd-comment-thread-renderer`) | ✅ |
-| Посты сообщества (`ytd-backstage-post-renderer`) | ✅ |
-| Чат трансляций (`#chat`, `yt-live-chat-renderer`) | ✅ |
-| Медиа-аттачменты (`ytd-attachment-renderer`) | ✅ |
-| Giphy / Tenor / прямые `.gif`-ссылки | ✅ |
-| **Аватарки пользователей** | 🟢 НЕ трогает |
-| **Эмодзи YouTube (`yt-emoji`)** | 🟢 НЕ трогает |
-| **Превью видео (`ytd-thumbnail`)** | 🟢 НЕ трогает |
+| Content type | Status |
+|---|---|
+| Classic `.gif` images | ✅ Blocked |
+| Giphy / Tenor embeds | ✅ Blocked |
+| YouTube Image Comments (stickers) | ✅ Blocked |
+| Community post media attachments | ✅ Blocked |
+| Live chat GIFs (`#chat`) | ✅ Blocked |
+| **User avatars** | 🟢 Untouched |
+| **YouTube emoji (`yt-emoji`)** | 🟢 Untouched |
+| **Video thumbnails** | 🟢 Untouched |
 
 ---
 
-## Архитектура (два рубежа защиты)
+## How It Works — Two Layers of Defense
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Рубеж 1 — styles.css (декларативный CSS)                   │
-│  run_at: document_start → применяется ДО рендеринга         │
-│  display: none !important → мгновенно скрывает GIF          │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────────┐
-│  Рубеж 2 — content.js (JS + MutationObserver)              │
-│                                                             │
-│  • isGifElement()    — детект по src, data-src, style      │
-│  • findMediaContainer() — удаляем минимальный контейнер    │
-│  • scheduleCleanup() — дебаунс 80мс, накопление мутаций    │
-│  • scanAndRemove()   — батч-удаление через rAF             │
-│  • MutationObserver  — subtree слежение за SPA-навигацией  │
-│                                                             │
-│  el.remove() → полное удаление из DOM → GC освобождает RAM │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Layer 1 — styles.css (declarative CSS)                      │
+│  run_at: document_start → applied BEFORE rendering           │
+│  display: none !important → hides GIFs instantly             │
+└───────────────────────┬──────────────────────────────────────┘
+                        │
+┌───────────────────────▼──────────────────────────────────────┐
+│  Layer 2 — content.js (JS + MutationObserver)                │
+│                                                              │
+│  • isGifElement()    — detects by src, data-src, style      │
+│  • findMediaContainer() — removes the smallest container    │
+│  • scheduleCleanup() — 80ms debounce, batches mutations     │
+│  • scanAndRemove()   — batch removal via requestAnimFrame   │
+│  • MutationObserver  — watches SPA navigation & scroll      │
+│                                                              │
+│  el.remove() → full DOM removal → GC frees animation RAM   │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Ключевые решения
+### Key design decisions
 
-- **Нет background service worker** — экономия памяти, расширение работает только на вкладках YouTube
-- **`run_at: document_start`** — CSS применяется раньше, чем GIF успевает начать загрузку
-- **Дебаунс 80мс** — YouTube генерирует сотни мутаций при виртуальном скролле; пакетируем их в один проход
-- **`requestAnimationFrame` + батч по 20 эл.** — не блокируем main thread при большом количестве GIF
-- **`el.remove()`** вместо `display:none` в JS — полное удаление из DOM освобождает память от декодированных кадров анимации
-
----
-
-## Установка в Chrome
-
-### Способ 1 — «Загрузить распакованное» (для разработки и личного использования)
-
-1. Открой `chrome://extensions/` в браузере
-2. Включи **«Режим разработчика»** (Developer mode) — переключатель в правом верхнем углу
-3. Нажми **«Загрузить распакованное»** (Load unpacked)
-4. Выбери папку `youtube-gif-blocker/` (ту, где лежит `manifest.json`)
-5. Расширение активно — иди на YouTube и проверяй 🎉
-
-> Выбери папку `youtube-gif-blocker` — ту, где лежит `manifest.json`
-
-### Способ 2 — Упаковка в .crx (для передачи другим)
-
-```powershell
-# Через Chrome Developer Dashboard или вручную:
-# chrome://extensions → Pack extension → выбрать папку
-```
+- **No background service worker** — zero idle memory usage
+- **`run_at: document_start`** — CSS loads before any GIF starts downloading
+- **80ms debounce** — YouTube fires hundreds of mutations on virtual scroll; we batch them
+- **`requestAnimationFrame` + batches of 20** — DOM removals spread across frames, no jank
+- **`el.remove()`** instead of `display:none` in JS — full DOM removal frees decoded animation frames from memory
 
 ---
 
-## Установка в Firefox
+## Installation
 
-1. Открой `about:debugging#/runtime/this-firefox`
-2. Нажми **«Load Temporary Add-on…»**
-3. Выбери файл `manifest.json` внутри папки `youtube-gif-blocker/`
+### Chrome / Edge / Brave / Opera
 
-> **Примечание:** временные расширения в Firefox сбрасываются при перезапуске браузера.  
-> Для постоянной установки нужна подпись через [Firefox Add-on Developer Hub](https://addons.mozilla.org/developers/).
+1. Download this repository: **Code → Download ZIP** and unzip it
+2. Open `chrome://extensions/`
+3. Enable **Developer mode** (toggle in the top-right corner)
+4. Click **«Load unpacked»**
+5. Select the unzipped `youtube-gif-blocker` folder
+6. Done — open YouTube and enjoy clean comments 🎉
+
+### Firefox
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **«Load Temporary Add-on…»**
+3. Select the `manifest.json` file inside the unzipped folder
+
+> **Note:** Temporary Firefox add-ons are removed on browser restart. For permanent installation, the extension needs to be signed via [Firefox Add-on Hub](https://addons.mozilla.org/developers/).
 
 ---
 
-## Как протестировать
+## Testing
 
-### Быстрый тест (2 минуты)
+### Quick test (2 minutes)
 
-1. Перейди на YouTube: [youtube.com/watch?v=dQw4w9WgXcQ](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-2. Открой комментарии
-3. Зайди на страницу с тегом `#GIF` или поищи видео с активным обсуждением
-4. Открой DevTools (`F12`) → Console — должна быть тишина (нет ошибок)
-
-### Тест через DevTools
+1. Open any YouTube video with comments
+2. Open DevTools (`F12`) → Console
+3. Type `allow pasting` and press Enter (one-time Chrome security step)
+4. Paste and run:
 
 ```javascript
-// Вставь в консоль на youtube.com — проверяем, что GIF-элементы удалены:
-const remaining = document.querySelectorAll('img[src*=".gif"], img[src*="giphy"], img[src*="tenor"]');
-console.log('Оставшихся GIF в DOM:', remaining.length); // должно быть 0
+const gifs = document.querySelectorAll(
+  'img[src*=".gif"], img[src*="giphy"], img[src*="tenor"], ytw-comment-image-attachment-view-model'
+);
+console.log('GIF elements remaining in DOM:', gifs.length); // should be 0
 ```
 
-### Тест MutationObserver (SPA-навигация)
-
-1. Открой любое видео с комментариями
-2. Перейди на другое видео **без перезагрузки** (клик по рекомендации)
-3. Снова выполни тест из консоли — счётчик должен оставаться 0
-
-### Проверка исключений (аватарки и эмодзи)
+### Verify safe elements are untouched
 
 ```javascript
-// Аватарки должны быть на месте:
+// Avatars should still be present:
 document.querySelectorAll('yt-img-shadow[is-avatar] img').length; // > 0
 
-// Превью видео — тоже:
+// Video thumbnails should still be present:
 document.querySelectorAll('ytd-thumbnail img').length; // > 0
 ```
 
+### Test SPA navigation
+
+1. Open any video with comments
+2. Navigate to another video **without reloading** (click a recommendation)
+3. Run the test again — counter should remain 0
+
 ---
 
-## Структура проекта
+## Project Structure
 
 ```
 youtube-gif-blocker/
-├── manifest.json   — конфигурация расширения (MV3)
-├── styles.css      — CSS-блокировка (рубеж 1)
-├── content.js      — JS-блокировка + MutationObserver (рубеж 2)
-└── README.md       — эта документация
+├── manifest.json   — MV3 extension config (minimal permissions)
+├── styles.css      — CSS blocking layer
+├── content.js      — JS blocking layer + MutationObserver
+└── README.md       — this file
 ```
 
 ---
 
-## Разрешения
+## Permissions
 
-Расширение запрашивает **только один** тип доступа:
+This extension requests **only one** permission type:
 
-| Разрешение | Зачем |
-|-----------|-------|
-| `host_permissions: *://*.youtube.com/*` | Инжектировать CSS и JS только на страницах YouTube |
+| Permission | Why |
+|---|---|
+| `host_permissions: *://*.youtube.com/*` | Inject CSS and JS only on YouTube pages |
 
-**Не запрашивается:** `storage`, `tabs`, `activeTab`, `scripting`, доступ к другим сайтам, сетевые запросы.
-
----
-
-## Возможные проблемы
-
-| Симптом | Решение |
-|---------|---------|
-| GIF всё ещё виден | Перезагрузи страницу YouTube (`Ctrl+F5`) после установки |
-| Расширение не появляется | Убедись, что выбрал папку с `manifest.json`, а не родительскую |
-| Ошибка в консоли | Открой `chrome://extensions` → «Детали» → «Просмотр ошибок» |
-| Аватарки исчезли | Открой issue — скорее всего, YouTube обновил вёрстку |
+**Not requested:** `storage`, `tabs`, `activeTab`, `scripting`, no network requests, no access to other sites.
 
 ---
 
-## Лицензия
+## Browser Compatibility
 
-MIT — используй, модифицируй, распространяй свободно.
+| Browser | Support |
+|---|---|
+| Chrome 88+ | ✅ Full |
+| Edge (Chromium) | ✅ Full |
+| Brave | ✅ Full |
+| Opera | ✅ Full |
+| Firefox 109+ | ✅ Full (MV3 supported) |
+| Safari | ❌ Requires separate conversion |
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| GIF still visible after install | Hard reload the YouTube page (`Ctrl+Shift+R`) |
+| Extension not appearing | Make sure you selected the folder containing `manifest.json` |
+| Console errors | Open `chrome://extensions` → Details → View errors |
+| Avatars disappeared | Open an issue — YouTube likely updated its markup |
+
+---
+
+## Contributing
+
+PRs and issues are welcome! If YouTube updates its comment structure and stickers break through, please open an issue with:
+- A screenshot of the visible GIF
+- The output of this console snippet:
+```javascript
+[...document.querySelectorAll('ytd-comment-renderer img')]
+  .map(img => `${img.src.slice(0,80)} | PARENT: ${img.parentElement?.tagName}`)
+  .join('\n');
+```
+
+---
+
+## License
+
+MIT — free to use, modify, and distribute.
